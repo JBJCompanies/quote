@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="JC Yard List" />
+  <meta name="apple-mobile-web-app-title" content="JC Yard" />
   <meta name="theme-color" content="#1a4d2e" />
-  <title>JC Trading — Yard Need List</title>
+  <title>JC Trading — Yard Inventory</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <style>
     :root {
@@ -77,7 +77,6 @@
     .btn-primary { background: var(--brand); color: #fff; }
     .btn-secondary { background: #e8f0eb; color: var(--brand); }
     .btn-ghost { background: transparent; color: var(--danger); border: 1px solid #f0c2c4; }
-    .actions { display: grid; gap: .55rem; margin-top: .4rem; }
     .hint { font-size: .78rem; color: var(--muted); margin: .2rem 0 .8rem; }
     .pill {
       display: inline-block; background: #e8f0eb; color: var(--brand);
@@ -92,17 +91,18 @@
     footer .wrap { max-width: 640px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1.4fr; gap: .5rem; }
     .locked { font-size: .72rem; color: var(--muted); text-align: center; margin-top: .45rem; }
     .err { color: var(--danger); font-size: .85rem; margin: .4rem 0; display: none; }
+    a.navlink { color: var(--brand); font-weight: 700; text-decoration: none; }
   </style>
 </head>
 <body>
   <header>
-    <h1>Yard Need List</h1>
-    <p>JC Trading · send needs straight to Jeremy</p>
+    <h1>Yard Inventory</h1>
+    <p>JC Trading · on-hand stock update</p>
   </header>
   <main>
     <div class="card">
       <span class="pill" id="acctPill">Private link</span>
-      <p class="hint" style="margin-top:.55rem">Walk the yard, add what you need, tap Send. This only goes to JC Trading — it cannot be redirected.</p>
+      <p class="hint" style="margin-top:.55rem">Walk the yard, record what you have on hand, tap Send. Goes only to JC Trading — cannot be redirected.</p>
       <label for="company">Your company</label>
       <input id="company" autocomplete="organization" placeholder="e.g. Jorgensen Trading" />
       <div class="row">
@@ -120,20 +120,20 @@
     </div>
 
     <div class="card">
-      <h2 style="margin:0 0 .55rem;font-size:1rem">Items needed</h2>
+      <h2 style="margin:0 0 .55rem;font-size:1rem">On-hand lines</h2>
       <div id="items"></div>
-      <button type="button" class="btn btn-secondary" id="addItem">+ Add another item</button>
+      <button type="button" class="btn btn-secondary" id="addItem">+ Add line</button>
     </div>
 
     <div class="card">
-      <label for="timing">Timing / tally notes</label>
-      <textarea id="timing" placeholder="e.g. need within 1 week or sooner; even tally preferred but close OK; open ship window"></textarea>
+      <label for="timing">Timing (optional)</label>
+      <textarea id="timing" placeholder="e.g. as of today / cycle count"></textarea>
       <label for="notes">Other notes</label>
       <textarea id="notes" placeholder="Anything else Jeremy should know"></textarea>
     </div>
     <p class="err" id="err"></p>
     <p class="hint" style="text-align:center;margin:.5rem 0 1.5rem">
-      <a id="invLink" href="inventory.html" style="color:var(--brand);font-weight:700;text-decoration:none">Update on-hand inventory →</a>
+      <a id="yardLink" class="navlink" href="index.html">← Back to yard need list</a>
     </p>
   </main>
 
@@ -148,7 +148,6 @@
   <script>
     // Hard-locked — never read destination from URL or form fields
     const DEST_EMAIL = "JCTradingUSA@proton.me";
-    const DEST_SMS = "4079120538"; // Jeremy cell digits only for sms: link option later
 
     const params = new URLSearchParams(location.search);
     const token = (params.get("t") || params.get("token") || "DEMO").trim();
@@ -158,6 +157,10 @@
     document.getElementById("acctPill").textContent = "Account token: " + token;
     if (presetCompany) document.getElementById("company").value = presetCompany;
     if (presetCity) document.getElementById("shipCity").value = presetCity;
+    (function () {
+      const a = document.getElementById("yardLink");
+      if (a && location.search) a.href = "index.html" + location.search;
+    })();
 
     const SIZES = ["2x4","2x6","2x8","2x10","2x12","4x4","4x6","Other"];
     const GRADES = ["#1","#1 Common","#1 Prime","#2","#2 Common","#2 Prime","MSR 1650","MSR 2100","MSR 2400","Other"];
@@ -168,18 +171,17 @@
       el.className = "item";
       el.dataset.n = n;
       el.innerHTML = `
-        <h3>Item ${n} <button type="button" class="btn btn-ghost" style="width:auto;padding:.25rem .55rem;float:right;font-size:.75rem" data-rm>Remove</button></h3>
+        <h3>Line ${n} <button type="button" class="btn btn-ghost" style="width:auto;padding:.25rem .55rem;float:right;font-size:.75rem" data-rm>Remove</button></h3>
         <div class="row">
           <div><label>Size</label><select data-f="size">${SIZES.map(s=>`<option>${s}</option>`).join("")}</select></div>
           <div><label>Grade</label><select data-f="grade">${GRADES.map(s=>`<option>${s}</option>`).join("")}</select></div>
         </div>
-        <div class="row3">
+        <div class="row">
           <div><label>Lengths</label><select data-f="lengths">${LENGTHS.map(s=>`<option>${s}</option>`).join("")}</select></div>
-          <div><label>Qty</label><input data-f="qty" inputmode="decimal" placeholder="pcs / MBF / TL" /></div>
-          <div><label>On hand</label><input data-f="onhand" inputmode="decimal" placeholder="optional" /></div>
+          <div><label>On hand qty</label><input data-f="onhand" inputmode="decimal" placeholder="pcs / MBF / units" /></div>
         </div>
-        <label>Item note</label>
-        <input data-f="note" placeholder="e.g. must be #1, not #2" />
+        <label>Note (optional)</label>
+        <input data-f="note" placeholder="e.g. wet / damaged / reserved" />
       `;
       el.querySelector("[data-rm]").onclick = () => {
         if (document.querySelectorAll(".item").length <= 1) return;
@@ -191,7 +193,7 @@
 
     function renumber() {
       [...document.querySelectorAll(".item")].forEach((el, i) => {
-        el.querySelector("h3").childNodes[0].textContent = `Item ${i + 1} `;
+        el.querySelector("h3").childNodes[0].textContent = `Line ${i + 1} `;
       });
     }
 
@@ -209,7 +211,6 @@
           size: g("size"),
           grade: g("grade"),
           lengths: g("lengths"),
-          qty: g("qty"),
           onhand: g("onhand"),
           note: g("note")
         };
@@ -229,7 +230,7 @@
 
     function bodyText(d) {
       const lines = [];
-      lines.push("JC TRADING — CUSTOMER YARD NEED");
+      lines.push("JC TRADING — CUSTOMER YARD INVENTORY");
       lines.push("Token: " + d.token);
       lines.push("Company: " + (d.company || "(blank)"));
       lines.push("Contact: " + (d.contact || "(blank)"));
@@ -237,13 +238,13 @@
       lines.push("Ship/yard city: " + (d.shipCity || "(blank)"));
       lines.push("Submitted (UTC): " + d.when);
       lines.push("");
-      lines.push("ITEMS:");
+      lines.push("ON HAND:");
       d.items.forEach((it) => {
-        lines.push(`${it.n}. ${it.size} ${it.grade} | lengths ${it.lengths} | qty ${it.qty || "?"} | on-hand ${it.onhand || "—"}`);
+        lines.push(`${it.n}. ${it.size} ${it.grade} | lengths ${it.lengths} | on-hand ${it.onhand || "?"}`);
         if (it.note) lines.push("   note: " + it.note);
       });
       lines.push("");
-      lines.push("TIMING / TALLY:");
+      lines.push("TIMING:");
       lines.push(d.timing || "(none)");
       lines.push("");
       lines.push("OTHER NOTES:");
@@ -257,14 +258,13 @@
     function validate(d) {
       if (!d.company) return "Add your company name.";
       if (!d.shipCity) return "Add ship / yard city.";
-      const hasQty = d.items.some((it) => it.qty);
-      if (!hasQty) return "Add quantity on at least one item.";
+      const hasOnHand = d.items.some((it) => it.onhand);
+      if (!hasOnHand) return "Add on-hand qty on at least one line.";
       return "";
     }
 
     function mailtoHref(d) {
-      const subject = `Yard need · ${d.company || "customer"} · ${d.shipCity || "city"} · ${d.token}`;
-      // Hard-coded To — never take from user input
+      const subject = `Yard inventory · ${d.company || "customer"} · ${d.shipCity || "city"} · ${d.token}`;
       return `mailto:${DEST_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyText(d))}`;
     }
 
@@ -283,12 +283,10 @@
       const err = document.getElementById("err");
       if (msg) { err.style.display = "block"; err.textContent = msg; return; }
       err.style.display = "none";
-      // Open device mail app addressed ONLY to Jeremy
       location.href = mailtoHref(d);
     };
 
-    // Save draft locally for Add to Home Screen reuse
-    const KEY = "jc_yard_" + token;
+    const KEY = "jc_inv_" + token;
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) || "null");
       if (saved) {
@@ -308,12 +306,6 @@
         });
       });
     } catch (e) {}
-
-    // Preserve token presets when jumping to inventory
-    (function () {
-      const a = document.getElementById("invLink");
-      if (a && location.search) a.href = "inventory.html" + location.search;
-    })();
   </script>
 </body>
 </html>

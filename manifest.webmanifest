@@ -1,9 +1,9 @@
 {
-  "name": "JC Trading Yard Need List",
+  "name": "JC Trading Yard",
   "short_name": "JC Yard",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#1a4d2e",
   "theme_color": "#1a4d2e",
-  "description": "Private yard need list that only sends to JC Trading."
+  "description": "JC Trading yard need list and on-hand inventory — sends only to JC Trading."
 }
