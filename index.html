@@ -91,7 +91,55 @@
     }
     footer .wrap { max-width: 640px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1.4fr; gap: .5rem; }
     .locked { font-size: .72rem; color: var(--muted); text-align: center; margin-top: .45rem; }
-    .err { color: var(--danger); font-size: .85rem; margin: .4rem 0; display: none; }
+
+    .err {
+      color: #fff;
+      background: var(--danger);
+      font-size: .9rem;
+      font-weight: 700;
+      margin: .5rem 0;
+      display: none;
+      padding: .65rem .8rem;
+      border-radius: 8px;
+      text-align: center;
+    }
+    .send-hint { font-size: .72rem; color: var(--muted); text-align: center; margin: .35rem 0 0; line-height: 1.3; }
+    .sheet-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 40;
+      background: rgba(20,32,26,.55);
+      align-items: flex-end; justify-content: center;
+      padding: 0;
+    }
+    .sheet-overlay.open { display: flex; }
+    .sheet {
+      background: #fff;
+      width: 100%; max-width: 640px;
+      max-height: min(92vh, 720px);
+      border-radius: 16px 16px 0 0;
+      padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+      box-shadow: 0 -8px 32px rgba(0,0,0,.2);
+      display: flex; flex-direction: column; gap: .55rem;
+      overflow: hidden;
+    }
+    .sheet h2 { margin: 0; font-size: 1.05rem; color: var(--brand); }
+    .sheet-status {
+      font-size: .8rem; font-weight: 700; color: var(--ok);
+      min-height: 1.1em; margin: 0;
+    }
+    .sheet-status.is-err { color: var(--danger); }
+    #sheetBody {
+      flex: 1; min-height: 140px; max-height: 42vh;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: .78rem; line-height: 1.4;
+      margin-bottom: 0; background: #fafcfb;
+    }
+    .sheet-actions { display: grid; gap: .45rem; }
+    .btn-sms { background: #c9a227; color: #1a1508; }
+    @media (min-width: 520px) {
+      .sheet-overlay { align-items: center; padding: 1rem; }
+      .sheet { border-radius: 16px; max-height: 85vh; }
+    }
   </style>
 </head>
 <body>
@@ -143,7 +191,24 @@
       <button type="button" class="btn btn-primary" id="send">Send to JC Trading</button>
     </div>
     <p class="locked">Locked destination: JCTradingUSA@proton.me</p>
+    <p class="send-hint">Works best: Copy list, then Email or Text. Mailto needs a mail app on your phone.</p>
   </footer>
+
+
+  <div id="sendSheet" class="sheet-overlay" aria-hidden="true">
+    <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+      <h2 id="sheetTitle">Send list</h2>
+      <p class="sheet-status" id="sheetStatus"></p>
+      <label for="sheetBody">Full formatted list</label>
+      <textarea id="sheetBody" readonly rows="12"></textarea>
+      <div class="sheet-actions">
+        <button type="button" class="btn btn-secondary" id="sheetCopy">Copy list</button>
+        <button type="button" class="btn btn-primary" id="sheetEmail">Email Jeremy</button>
+        <button type="button" class="btn btn-sms" id="sheetSms">Text Jeremy</button>
+        <button type="button" class="btn btn-ghost" id="sheetClose">Close</button>
+      </div>
+    </div>
+  </div>
 
   <script>
     // Hard-locked — never read destination from URL or form fields
@@ -262,29 +327,145 @@
       return "";
     }
 
-    function mailtoHref(d) {
-      const subject = `Yard need · ${d.company || "customer"} · ${d.shipCity || "city"} · ${d.token}`;
-      // Hard-coded To — never take from user input
-      return `mailto:${DEST_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(bodyText(d))}`;
+
+    const MAILTO_BODY_MAX = 1200;
+    let sheetPayload = { body: "", subject: "", company: "", city: "", kind: "need" };
+
+    function pageUrlNoHash() {
+      return location.href.split("#")[0];
     }
+
+    function setSheetStatus(msg, isErr) {
+      const el = document.getElementById("sheetStatus");
+      el.textContent = msg || "";
+      el.classList.toggle("is-err", !!isErr);
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text).then(() => true).catch(() => false).then((ok) => {
+          if (ok) return true;
+          return fallbackCopy(text);
+        });
+      }
+      return Promise.resolve(fallbackCopy(text));
+    }
+
+    function fallbackCopy(text) {
+      try {
+        const ta = document.getElementById("sheetBody");
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, text.length);
+        const ok = document.execCommand("copy");
+        return !!ok;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function showErr(msg) {
+      const err = document.getElementById("err");
+      err.style.display = "block";
+      err.textContent = msg;
+      err.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+
+    function clearErr() {
+      const err = document.getElementById("err");
+      err.style.display = "none";
+      err.textContent = "";
+    }
+
+    function openSendSheet(d) {
+      const body = bodyText(d);
+      const subject = `Yard need · ${d.company || "customer"} · ${d.shipCity || "city"} · ${d.token}`;
+      sheetPayload = {
+        body,
+        subject,
+        company: d.company || "customer",
+        city: d.shipCity || "city",
+        kind: "need"
+      };
+      document.getElementById("sheetBody").value = body;
+      document.getElementById("sheetTitle").textContent = "Send yard need list";
+      setSheetStatus("Copying list…");
+      const overlay = document.getElementById("sendSheet");
+      overlay.classList.add("open");
+      overlay.setAttribute("aria-hidden", "false");
+      copyText(body).then((ok) => {
+        setSheetStatus(ok ? "Copied — ready to Email or Text." : "Could not auto-copy — tap Copy list.");
+      });
+    }
+
+    function closeSendSheet() {
+      const overlay = document.getElementById("sendSheet");
+      overlay.classList.remove("open");
+      overlay.setAttribute("aria-hidden", "true");
+    }
+
+    function emailJeremy() {
+      const { body, subject, company, city } = sheetPayload;
+      // Always copy full body first
+      copyText(body).then((ok) => {
+        setSheetStatus(ok ? "Copied. Opening email…" : "Copy failed — paste may be empty.");
+        let mailBody = body;
+        if (body.length > MAILTO_BODY_MAX) {
+          mailBody = `Yard need from ${company} (${city}). Full list is on my clipboard — please paste into this email.`;
+        }
+        const href = `mailto:${DEST_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(mailBody)}`;
+        // Prefer window.open / location for mail clients
+        try {
+          location.href = href;
+        } catch (e) {
+          setSheetStatus("Could not open mail app. Use Copy list, then paste into email.", true);
+        }
+      });
+    }
+
+    function textJeremy() {
+      const { body, company, city } = sheetPayload;
+      copyText(body).then((ok) => {
+        const url = pageUrlNoHash();
+        const smsBody = `JC yard list from ${company} / ${city}. List copied — paste in next text if needed. ${url}`;
+        setSheetStatus(ok ? "Copied. Opening Texts…" : "Copy failed — you can still send a short text.");
+        const href = `sms:${DEST_SMS}?&body=${encodeURIComponent(smsBody)}`;
+        // iOS uses sms:num&body= or sms:num?body=; ?& works on many Android/iOS
+        try {
+          location.href = href;
+        } catch (e) {
+          setSheetStatus("Could not open Messages. Use Copy list.", true);
+        }
+      });
+    }
+
+    document.getElementById("sheetCopy").onclick = () => {
+      const text = document.getElementById("sheetBody").value;
+      copyText(text).then((ok) => {
+        setSheetStatus(ok ? "Copied." : "Copy failed — select the list and copy manually.", !ok);
+      });
+    };
+    document.getElementById("sheetEmail").onclick = emailJeremy;
+    document.getElementById("sheetSms").onclick = textJeremy;
+    document.getElementById("sheetClose").onclick = closeSendSheet;
+    document.getElementById("sendSheet").addEventListener("click", (e) => {
+      if (e.target.id === "sendSheet") closeSendSheet();
+    });
 
     document.getElementById("preview").onclick = () => {
       const d = collect();
       const msg = validate(d);
-      const err = document.getElementById("err");
-      if (msg) { err.style.display = "block"; err.textContent = msg; return; }
-      err.style.display = "none";
-      alert(bodyText(d));
+      if (msg) { showErr(msg); return; }
+      clearErr();
+      openSendSheet(d);
     };
 
     document.getElementById("send").onclick = () => {
       const d = collect();
       const msg = validate(d);
-      const err = document.getElementById("err");
-      if (msg) { err.style.display = "block"; err.textContent = msg; return; }
-      err.style.display = "none";
-      // Open device mail app addressed ONLY to Jeremy
-      location.href = mailtoHref(d);
+      if (msg) { showErr(msg); return; }
+      clearErr();
+      openSendSheet(d);
     };
 
     // Save draft locally for Add to Home Screen reuse
