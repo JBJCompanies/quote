@@ -79,6 +79,7 @@
     .btn-ghost { background: transparent; color: var(--danger); border: 1px solid #f0c2c4; }
     .actions { display: grid; gap: .55rem; margin-top: .4rem; }
     .hint { font-size: .78rem; color: var(--muted); margin: .2rem 0 .8rem; }
+    .pcs-hint { font-size: .72rem; color: var(--muted); margin: .15rem 0 0; font-weight: 600; }
     .pill {
       display: inline-block; background: #e8f0eb; color: var(--brand);
       font-size: .72rem; font-weight: 700; padding: .2rem .5rem; border-radius: 999px;
@@ -228,6 +229,50 @@
     const GRADES = ["#1","#1 Common","#1 Prime","#2","#2 Common","#2 Prime","MSR 1650","MSR 2100","MSR 2400","Other"];
     const LENGTHS = ["8","10","12","14","16","18","20","22","24","mixed / even tally","open"];
 
+    function normalizeSize(size) {
+      return String(size || "").replace(/[×✕⨯]/g, "x").replace(/\s+/g, "").toLowerCase();
+    }
+
+    /** Pack pcs per unit (Jo). #2 Prime = half. Other sizes/grades → null (TBD). */
+    function pcsPerUnit(size, grade) {
+      const s = normalizeSize(size);
+      const g = String(grade || "");
+      const is2Prime = /#?\s*2\s*prime/i.test(g);
+      let base = null;
+      if (s === "2x4") base = 208;
+      else if (s === "2x6") base = 128;
+      else return null;
+      return is2Prime ? base / 2 : base;
+    }
+
+    function pcsHintText(size, grade) {
+      const n = pcsPerUnit(size, grade);
+      if (n != null) return `≈ ${n} pcs/unit`;
+      return "pcs/unit TBD — enter units";
+    }
+
+    function formatUnitsPhrase(unitsVal, size, grade) {
+      const u = (unitsVal || "").trim();
+      if (!u) return "units: ?";
+      const n = pcsPerUnit(size, grade);
+      if (n == null) return `units: ${u}`;
+      const num = Number(u);
+      if (Number.isFinite(num)) return `units: ${u} (≈ ${num * n} pcs)`;
+      return `units: ${u} (≈ ${u}×${n} pcs)`;
+    }
+
+    function wirePcsHint(el) {
+      const sizeSel = el.querySelector('[data-f="size"]');
+      const gradeSel = el.querySelector('[data-f="grade"]');
+      const hint = el.querySelector("[data-pcs-hint]");
+      const update = () => {
+        hint.textContent = pcsHintText(sizeSel.value, gradeSel.value);
+      };
+      sizeSel.addEventListener("change", update);
+      gradeSel.addEventListener("change", update);
+      update();
+    }
+
     function itemCard(n) {
       const el = document.createElement("div");
       el.className = "item";
@@ -240,8 +285,12 @@
         </div>
         <div class="row3">
           <div><label>Lengths</label><select data-f="lengths">${LENGTHS.map(s=>`<option>${s}</option>`).join("")}</select></div>
-          <div><label>Qty</label><input data-f="qty" inputmode="decimal" placeholder="pcs / MBF / TL" /></div>
-          <div><label>On hand</label><input data-f="onhand" inputmode="decimal" placeholder="optional" /></div>
+          <div>
+            <label>Units</label>
+            <input data-f="qty" inputmode="decimal" placeholder="# of units" />
+            <div class="pcs-hint" data-pcs-hint></div>
+          </div>
+          <div><label>On hand (units)</label><input data-f="onhand" inputmode="decimal" placeholder="optional" /></div>
         </div>
         <label>Item note</label>
         <input data-f="note" placeholder="e.g. must be #1, not #2" />
@@ -251,6 +300,7 @@
         el.remove();
         renumber();
       };
+      wirePcsHint(el);
       return el;
     }
 
@@ -304,7 +354,17 @@
       lines.push("");
       lines.push("ITEMS:");
       d.items.forEach((it) => {
-        lines.push(`${it.n}. ${it.size} ${it.grade} | lengths ${it.lengths} | qty ${it.qty || "?"} | on-hand ${it.onhand || "—"}`);
+        const unitPhrase = formatUnitsPhrase(it.qty, it.size, it.grade);
+        const onhandBit = it.onhand
+          ? (() => {
+              const n = pcsPerUnit(it.size, it.grade);
+              if (n != null && Number.isFinite(Number(it.onhand))) {
+                return `on-hand units: ${it.onhand} (≈ ${Number(it.onhand) * n} pcs)`;
+              }
+              return `on-hand units: ${it.onhand}`;
+            })()
+          : "on-hand: —";
+        lines.push(`${it.n}. ${it.size} ${it.grade} | lengths ${it.lengths} | ${unitPhrase} | ${onhandBit}`);
         if (it.note) lines.push("   note: " + it.note);
       });
       lines.push("");
@@ -322,8 +382,8 @@
     function validate(d) {
       if (!d.company) return "Add your company name.";
       if (!d.shipCity) return "Add ship / yard city.";
-      const hasQty = d.items.some((it) => it.qty);
-      if (!hasQty) return "Add quantity on at least one item.";
+      const hasUnits = d.items.some((it) => it.qty);
+      if (!hasUnits) return "Add units on at least one item.";
       return "";
     }
 
