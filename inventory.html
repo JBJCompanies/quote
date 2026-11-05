@@ -261,10 +261,10 @@
       return "pcs/unit TBD — enter units";
     }
 
-    function formatUnitsPhrase(unitsVal, size, grade) {
+    function formatUnitsPhrase(unitsVal, ppuVal) {
       const u = (unitsVal || "").trim();
       if (!u) return "units: ?";
-      const n = pcsPerUnit(size, grade);
+      const n = Number(ppuVal) > 0 ? Number(ppuVal) : null;
       if (n == null) return `units: ${u}`;
       const num = Number(u);
       if (Number.isFinite(num)) return `units: ${u} (≈ ${num * n} pcs)`;
@@ -274,9 +274,15 @@
     function wirePcsHint(el) {
       const sizeSel = el.querySelector('[data-f="size"]');
       const gradeSel = el.querySelector('[data-f="grade"]');
+      const ppu = el.querySelector('[data-f="ppu"]');
       const hint = el.querySelector("[data-pcs-hint]");
+      ppu.addEventListener("input", () => { ppu.dataset.edited = ppu.value.trim() ? "1" : ""; });
       const update = () => {
-        hint.textContent = pcsHintText(sizeSel.value, gradeSel.value);
+        if (!ppu.dataset.edited) {
+          const n = pcsPerUnit(sizeSel.value, gradeSel.value);
+          ppu.value = n != null ? n : "";
+        }
+        hint.textContent = ppu.value ? "edit if your packs differ" : "enter pcs/unit if known";
       };
       sizeSel.addEventListener("change", update);
       gradeSel.addEventListener("change", update);
@@ -301,9 +307,11 @@
           <div>
             <label>Units on hand</label>
             <input data-f="onhand" inputmode="decimal" placeholder="# of units" />
-            <div class="pcs-hint" data-pcs-hint></div>
           </div>
         </div>
+        <label>Pieces per unit</label>
+        <input data-f="ppu" inputmode="numeric" placeholder="pcs per unit" />
+        <div class="pcs-hint" data-pcs-hint></div>
         <label>Note (optional)</label>
         <input data-f="note" placeholder="e.g. wet / damaged / reserved" />
       `;
@@ -317,6 +325,8 @@
       spSel.addEventListener("change", () => {
         const list = GRADES_BY[spSel.value] || GRADES;
         grSel.innerHTML = list.map(s=>`<option>${s}</option>`).join("");
+        const ppuEl = el.querySelector('[data-f="ppu"]');
+        ppuEl.dataset.edited = ""; 
         grSel.dispatchEvent(new Event("change"));
       });
       wirePcsHint(el);
@@ -345,6 +355,7 @@
           grade: g("grade"),
           lengths: g("lengths"),
           onhand: g("onhand"),
+          ppu: g("ppu"),
           note: g("note")
         };
       });
@@ -373,7 +384,7 @@
       lines.push("");
       lines.push("ON HAND:");
       d.items.forEach((it) => {
-        const uPhrase = formatUnitsPhrase(it.onhand, it.size, it.grade);
+        const uPhrase = formatUnitsPhrase(it.onhand, it.ppu);
         lines.push(`${it.n}. ${it.species} ${it.size} ${it.grade} | lengths ${it.lengths} | on-hand ${uPhrase}`);
         if (it.note) lines.push("   note: " + it.note);
       });
