@@ -230,6 +230,12 @@
     })();
 
     const SIZES = ["2x4","2x6","2x8","2x10","2x12","4x4","4x6","6x6","8x8","10x10","12x12"];
+    const SPECIES = ["Southern Yellow Pine (SYP)","SPF","Euro Spruce"];
+    const GRADES_BY = {
+      "Southern Yellow Pine (SYP)": null,
+      "SPF": ["MSR 2400","MSR 2100","MSR 1650","#1/#2","#2&Btr","#2","#3","Stud","Economy"],
+      "Euro Spruce": ["MSR 2100","MSR 1650","#1/#2","#2&Btr","#2","#3","Stud","Economy"]
+    };
     const GRADES = ["MSR 2850","MSR 2700","MSR 2400","MSR 2100","MSR 1650","#1","#1 Common","#1 Prime","#2","#2 Common","#2 Prime","#3","#4","MR","#3/#4 Mix"];
     const LENGTHS = ["8","10","12","14","16","18","20","22","24","mixed / even tally","open"];
 
@@ -284,6 +290,9 @@
       el.innerHTML = `
         <h3>Line ${n} <button type="button" class="btn btn-ghost" style="width:auto;padding:.25rem .55rem;float:right;font-size:.75rem" data-rm>Remove</button></h3>
         <div class="row">
+          <div style="flex-basis:100%"><label>Species</label><select data-f="species">${SPECIES.map(s=>`<option>${s}</option>`).join("")}</select></div>
+        </div>
+        <div class="row">
           <div><label>Size</label><select data-f="size">${SIZES.map(s=>`<option>${s}</option>`).join("")}</select></div>
           <div><label>Grade</label><select data-f="grade">${GRADES.map(s=>`<option>${s}</option>`).join("")}</select></div>
         </div>
@@ -303,6 +312,13 @@
         el.remove();
         renumber();
       };
+      const spSel = el.querySelector('[data-f="species"]');
+      const grSel = el.querySelector('[data-f="grade"]');
+      spSel.addEventListener("change", () => {
+        const list = GRADES_BY[spSel.value] || GRADES;
+        grSel.innerHTML = list.map(s=>`<option>${s}</option>`).join("");
+        grSel.dispatchEvent(new Event("change"));
+      });
       wirePcsHint(el);
       return el;
     }
@@ -324,6 +340,7 @@
         const g = (f) => el.querySelector(`[data-f="${f}"]`).value.trim();
         return {
           n: i + 1,
+          species: g("species"),
           size: g("size"),
           grade: g("grade"),
           lengths: g("lengths"),
@@ -357,7 +374,7 @@
       lines.push("ON HAND:");
       d.items.forEach((it) => {
         const uPhrase = formatUnitsPhrase(it.onhand, it.size, it.grade);
-        lines.push(`${it.n}. ${it.size} ${it.grade} | lengths ${it.lengths} | on-hand ${uPhrase}`);
+        lines.push(`${it.n}. ${it.species} ${it.size} ${it.grade} | lengths ${it.lengths} | on-hand ${uPhrase}`);
         if (it.note) lines.push("   note: " + it.note);
       });
       lines.push("");
